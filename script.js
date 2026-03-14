@@ -92,8 +92,16 @@ function loop() {
     // 3. Física personaje
     if (!showActivo) {
         lit.y += lit.dy;
-        if (lit.y + lit.h < Y_PISO) { lit.dy += GRAVEDAD; enSuelo = false; lit.estado='salta'; }
-        else { lit.dy = 0; lit.y = Y_PISO - lit.h; enSuelo = true; lit.estado=teclas.derecha||teclas.izquierda?'camina':'quieto'; }
+        if (lit.y + lit.h < Y_PISO) { 
+            lit.dy += GRAVEDAD; 
+            enSuelo = false; 
+            lit.estado='salta'; 
+        } else { 
+            lit.dy = 0; 
+            lit.y = Y_PISO - lit.h; 
+            enSuelo = true; 
+            lit.estado = teclas.derecha||teclas.izquierda ? 'camina':'quieto'; 
+        }
 
         if (teclas.derecha) {
             if (lit.x < canvas.width * 0.4) lit.x += VELOCIDAD;
@@ -130,14 +138,14 @@ function loop() {
         }
     });
 
-    // 5. Personaje con animaciones
+    // 5. Personaje con animaciones correctas
     let sprite = showActivo ? assets.canto : assets.lit;
     if (sprite.complete) {
         let cols = 4;
-        let filas = showActivo?1:2;
-        let sw = sprite.width/cols;
-        let sh = sprite.height/filas;
-        let fila=0;
+        let filas = showActivo ? 1 : 2;
+        let sw = showActivo ? 384 : 384; // ancho de un frame
+        let sh = showActivo ? 512 : 512; // alto de un frame
+        let fila = 0;
         if(!showActivo){
             if(lit.estado=='camina') fila=1;
             else fila=0;
