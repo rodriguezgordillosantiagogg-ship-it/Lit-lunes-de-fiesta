@@ -6,7 +6,7 @@ const videoContainer = document.getElementById('videoContainer');
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
-const Y_PISO = canvas.height - 80; // Subí un poco el piso para que se vea mejor
+const Y_PISO = canvas.height - 80;
 
 let imagenesCargadas = 0;
 const totalImagenes = 6;
@@ -21,7 +21,6 @@ const assets = {
     bafle: new Image(), micro: new Image(), gorra: new Image()
 };
 
-// --- CARGA DE ASSETS ---
 assets.lit.onload = checkCarga; assets.lit.src = 'lit_killah_master.png';
 assets.canto.onload = checkCarga; assets.canto.src = 'lit_cantando_flow.png';
 assets.fondo.onload = checkCarga; assets.fondo.src = 'fondo_ciudad_fiesta.jpg';
@@ -35,122 +34,124 @@ let showIsRunning = false;
 let cinematicPlayed = false;
 const teclas = { derecha: { presionada: false }, izquierda: { presionada: false } };
 
-class Jugador {
-    constructor() {
-        this.x = 100; this.y = Y_PISO - 120; this.dy = 0;
-        this.frame = 0; this.timer = Date.now();
+class Sprite {
+    constructor(img, cantFramesHorizontal, cantFilas) {
+        this.img = img;
+        this.cantFrames = cantFramesHorizontal;
+        this.cantFilas = cantFilas;
+        this.frameActual = 0;
+        this.filaActual = 0;
+        this.timer = Date.now();
     }
-    dibujar() {
-        const ahora = Date.now();
-        let img = (showIsRunning && cinematicPlayed) ? assets.canto : assets.lit;
-        
-        // Si no se ve nada, es posible que el frame sea muy grande. 
-        // Vamos a intentar dibujar la imagen completa si el recorte falla.
-        try {
-            let fila = (teclas.derecha.presionada || teclas.izquierda.presionada) ? 64 : 0;
-            let maxFrames = (showIsRunning) ? 4 : (fila === 64 ? 4 : 2);
-            if (ahora - this.timer > 100) { this.frame = (this.frame + 1) % maxFrames; this.timer = ahora; }
-            
-            // Dibujo con recorte (Sprite Sheet)
-            ctx.drawImage(img, this.frame * 64, fila, 64, 64, this.x, this.y, 120, 120);
-        } catch (e) {
-            // Dibujo de emergencia (Imagen completa)
-            ctx.drawImage(img, this.x, this.y, 120, 120);
+
+    dibujar(x, y, anchoDestino, altoDestino, esLit = false) {
+        // Calculamos cuánto mide CADA frame dividiendo el total de la imagen
+        const anchoFrame = this.img.width / this.cantFrames;
+        const altoFrame = this.img.height / this.cantFilas;
+
+        // Si Lit se mueve, usamos la fila 2 (índice 1). Si está quieto, la fila 1 (índice 0).
+        if (esLit) {
+            this.filaActual = (teclas.derecha.presionada || teclas.izquierda.presionada) ? 1 : 0;
+            // Ajuste de frames: caminando suele tener 4, quieto 2.
+            let maxF = (this.filaActual === 1) ? 4 : 2;
+            if (Date.now() - this.timer > 120) {
+                this.frameActual = (this.frameActual + 1) % maxF;
+                this.timer = Date.now();
+            }
+        } else {
+            // Animación para enemigos
+            if (Date.now() - this.timer > 150) {
+                this.frameActual = (this.frameActual + 1) % this.cantFrames;
+                this.timer = Date.now();
+            }
         }
+
+        ctx.drawImage(
+            this.img,
+            this.frameActual * anchoFrame, this.filaActual * altoFrame, // Dónde empieza el recorte
+            anchoFrame, altoFrame,                                     // Tamaño del recorte
+            x, y,                                                      // Dónde se dibuja
+            anchoDestino, altoDestino                                  // Tamaño en pantalla
+        );
     }
-    actualizar() {
-        if (showIsRunning && !cinematicPlayed) return;
-        this.y += this.dy;
-        if (this.y + 120 < Y_PISO) { this.dy += 0.8; }
-        else { this.dy = 0; this.y = Y_PISO - 120; }
-        if (teclas.derecha.presionada && this.x < 400) this.x += 6;
-        else if (teclas.izquierda.presionada && this.x > 50) this.x -= 6;
+}
+
+// Creamos los objetos de animación pasándole (Imagen, Cuántos dibujos a lo ancho, Cuántos a lo largo)
+const animLit = new Sprite(assets.lit, 4, 2); 
+const animCanto = new Sprite(assets.canto, 4, 1);
+const animBafle = new Sprite(assets.bafle, 4, 1);
+const animGorra = new Sprite(assets.gorra, 3, 1);
+const animMicro = new Sprite(assets.micro, 3, 1);
+
+let litX = 100;
+let litY = Y_PISO - 120;
+let litDy = 0;
+
+function main() {
+    if (window.innerHeight > window.innerWidth) { requestAnimationFrame(main); return; }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Dibujar Fondo
+    let xF = -(scrollOffset * 0.5 % canvas.width);
+    ctx.drawImage(assets.fondo, xF, 0, canvas.width, canvas.height);
+    ctx.drawImage(assets.fondo, xF + canvas.width, 0, canvas.width, canvas.height);
+
+    // Lógica de Lit
+    if (!showIsRunning || cinematicPlayed) {
+        litY += litDy;
+        if (litY + 120 < Y_PISO) litDy += 0.8;
+        else { litDy = 0; litY = Y_PISO - 120; }
+
+        if (teclas.derecha.presionada && litX < 400) litX += 6;
+        else if (teclas.izquierda.presionada && litX > 50) litX -= 6;
         else if (teclas.derecha.presionada) scrollOffset += 6;
     }
-}
 
-class Enemigo {
-    constructor(x, y, img) { this.x = x; this.y = y; this.img = img; }
-    dibujar() {
-        let posX = this.x - scrollOffset;
-        if (posX > -100 && posX < canvas.width + 100) {
-            ctx.drawImage(this.img, posX, this.y, 80, 80);
+    // Dibujar Lit (AQUÍ ES DONDE SALE SÍ O SÍ)
+    let imgActual = (showIsRunning && cinematicPlayed) ? animCanto : animLit;
+    imgActual.dibujar(litX, litY, 120, 120, true);
+
+    // Dibujar Enemigos
+    const posicionesEnemigos = [
+        { x: 1200, y: Y_PISO - 80, anim: animBafle },
+        { x: 2200, y: Y_PISO - 100, anim: animGorra },
+        { x: 3000, y: Y_PISO - 80, anim: animMicro }
+    ];
+
+    posicionesEnemigos.forEach(en => {
+        let posX = en.x - scrollOffset;
+        en.anim.dibujar(posX, en.y, 80, 80);
+
+        // Colisión
+        if (litX < posX + 50 && litX + 60 > posX && litY < en.y + 50 && litY + 60 > en.y) {
+            if (!showIsRunning) gameIsOver = true;
         }
+    });
+
+    if (scrollOffset > 5000 && !showIsRunning) activarCinematica();
+
+    if (!gameIsOver) requestAnimationFrame(main);
+    else {
+        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = "white"; ctx.textAlign="center";
+        ctx.fillText("¡CHOCASTE! RECARGA", canvas.width/2, canvas.height/2);
     }
 }
-
-const lit = new Jugador();
-const enemigos = [
-    new Enemigo(1200, Y_PISO - 80, assets.bafle),
-    new Enemigo(2200, Y_PISO - 80, assets.gorra),
-    new Enemigo(3200, Y_PISO - 80, assets.micro)
-];
 
 // --- EVENTOS ---
 window.addEventListener('keydown', (e) => {
     if (e.code === 'ArrowRight') teclas.derecha.presionada = true;
     if (e.code === 'ArrowLeft') teclas.izquierda.presionada = true;
-    if (e.code === 'Space' && lit.y >= Y_PISO - 121) lit.dy = -16;
+    if (e.code === 'Space' && litY >= Y_PISO - 121) litDy = -16;
 });
 window.addEventListener('keyup', (e) => {
     if (e.code === 'ArrowRight') teclas.derecha.presionada = false;
     if (e.code === 'ArrowLeft') teclas.izquierda.presionada = false;
 });
 
-// Controles táctiles
-const setupTouch = (id, tecla) => {
-    const btn = document.getElementById(id);
-    if(btn) {
-        btn.addEventListener('touchstart', (e) => { e.preventDefault(); teclas[tecla].presionada = true; });
-        btn.addEventListener('touchend', () => teclas[tecla].presionada = false);
-    }
-};
-setupTouch('btnIzq', 'izquierda');
-setupTouch('btnDer', 'derecha');
-document.getElementById('btnSalto')?.addEventListener('touchstart', (e) => { 
-    e.preventDefault(); if (lit.y >= Y_PISO - 121) lit.dy = -16; 
-});
-
 function activarCinematica() {
     showIsRunning = true;
-    teclas.derecha.presionada = false;
     videoContainer.style.display = 'block';
-    videoFinal.play().catch(e => console.log("Error video:", e));
-    videoFinal.onended = () => {
-        videoContainer.style.display = 'none';
-        cinematicPlayed = true;
-        audioFinal.play();
-    };
-}
-
-function main() {
-    if (window.innerHeight > window.innerWidth) {
-        ctx.fillStyle = "black"; ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.fillStyle = "white"; ctx.textAlign="center";
-        ctx.fillText("Gira el celular 🔄", canvas.width/2, canvas.height/2);
-        requestAnimationFrame(main); return;
-    }
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    let xF = -(scrollOffset * 0.5 % canvas.width);
-    ctx.drawImage(assets.fondo, xF, 0, canvas.width, canvas.height);
-    ctx.drawImage(assets.fondo, xF + canvas.width, 0, canvas.width, canvas.height);
-    
-    lit.actualizar(); 
-    lit.dibujar();
-    
-    enemigos.forEach(en => {
-        en.dibujar();
-        let posX = en.x - scrollOffset;
-        if (lit.x < posX + 50 && lit.x + 60 > posX && lit.y < en.y + 50 && lit.y + 60 > en.y) {
-            if (!showIsRunning) gameIsOver = true;
-        }
-    });
-
-    if (scrollOffset > 4000 && !showIsRunning) activarCinematica();
-    if (!gameIsOver) requestAnimationFrame(main);
-    else {
-        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.fillStyle = "white"; ctx.font = "24px Arial"; ctx.textAlign="center";
-        ctx.fillText("¡CAÍSTE! RECARGA PARA INTENTARLO", canvas.width/2, canvas.height/2);
-    }
+    videoFinal.play();
+    videoFinal.onended = () => { videoContainer.style.display = 'none'; cinematicPlayed = true; audioFinal.play(); };
 }
