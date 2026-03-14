@@ -1,94 +1,105 @@
-const canvas = document.querySelector('canvas')
-const ctx = canvas.getContext('2d')
-const videoFinal = document.getElementById('videoFinal')
-const audioFinal = document.getElementById('audioFinal')
-const videoContainer = document.getElementById('videoContainer')
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const videoFinal = document.getElementById('videoFinal');
+const audioFinal = document.getElementById('audioFinal');
 
-canvas.width = window.innerWidth
-canvas.height = window.innerHeight
-ctx.imageSmoothingEnabled = false
+// Ajuste real al tamaño de la ventana
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.onresize = resize;
+resize();
 
-// --- CONSTANTES ESTILO MARIO ---
-const GRAVITY = 0.8
-const JUMP_FORCE = -16
-const WALK_SPEED = 6
-const GROUND_Y = canvas.height - 80
+ctx.imageSmoothingEnabled = false;
 
-// --- ASSETS ---
+// Configuración estilo Mario
+const GRAVEDAD = 0.8;
+const Y_PISO = canvas.height - 100;
+
 const assets = {
-  lit: new Image(),
-  canto: new Image(),
-  fondo: new Image(),
-  bafle: new Image()
+    lit: new Image(), canto: new Image(), fondo: new Image()
+};
+assets.lit.src = 'lit_killah_master.png';
+assets.canto.src = 'lit_cantando_flow.png';
+assets.fondo.src = 'fondo_ciudad_fiesta.jpg';
+
+let scrollOffset = 0;
+let litX = 100;
+let litY = Y_PISO - 120;
+let litDy = 0;
+let showInCourse = false;
+const teclas = { derecha: false };
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. DIBUJAR FONDO (Si no carga, se verá negro pero el juego seguirá)
+    if (assets.fondo.complete) {
+        let xF = -(scrollOffset * 0.3 % canvas.width);
+        ctx.drawImage(assets.fondo, xF, 0, canvas.width, canvas.height);
+        ctx.drawImage(assets.fondo, xF + canvas.width, 0, canvas.width, canvas.height);
+    }
+
+    // 2. DIBUJAR PISO DE BLOQUES (Siempre visible)
+    ctx.fillStyle = "#8b4513"; // Marrón Mario
+    ctx.fillRect(0, Y_PISO, canvas.width, 100);
+    ctx.fillStyle = "#ffaa00"; // Borde brillante
+    ctx.fillRect(0, Y_PISO, canvas.width, 6);
+
+    // 3. LÓGICA DE MOVIMIENTO
+    if (!showInCourse) {
+        litY += litDy;
+        if (litY + 120 < Y_PISO) litDy += GRAVEDAD;
+        else { litDy = 0; litY = Y_PISO - 120; }
+
+        if (teclas.derecha) {
+            if (litX < 400) litX += 6;
+            else scrollOffset += 6;
+        }
+    }
+
+    // 4. DIBUJAR A LIT (Si la imagen no carga, dibuja un cuadro para que sepas dónde está)
+    if (assets.lit.complete && !showInCourse) {
+        let fila = teclas.derecha ? 1 : 0;
+        let sw = assets.lit.width / 4;
+        let sh = assets.lit.height / 2;
+        let frame = Math.floor(Date.now() / 130) % 4;
+        ctx.drawImage(assets.lit, frame * sw, fila * sh, sw, sh, litX, litY, 120, 120);
+    } else if (showInCourse && assets.canto.complete) {
+        let sw = assets.canto.width / 4;
+        let frame = Math.floor(Date.now() / 250) % 4;
+        ctx.drawImage(assets.canto, frame * sw, 0, sw, assets.canto.height, litX, litY, 120, 120);
+    } else {
+        // MODO DE EMERGENCIA: Cuadro rojo si no hay imagen
+        ctx.fillStyle = "red";
+        ctx.fillRect(litX, litY, 50, 120);
+    }
+
+    // META (Bandera)
+    let metaX = 4000 - scrollOffset;
+    ctx.fillStyle = "white"; ctx.fillRect(metaX, Y_PISO - 200, 5, 200);
+    ctx.fillStyle = "red"; ctx.fillRect(metaX + 5, Y_PISO - 200, 40, 30);
+
+    if (scrollOffset > 3950 && !showInCourse) {
+        showInCourse = true;
+        document.getElementById('videoContainer').style.display = "block";
+        videoFinal.play();
+        videoFinal.onended = () => {
+            document.getElementById('videoContainer').style.display = "none";
+            audioFinal.play();
+        };
+    }
+
+    requestAnimationFrame(draw);
 }
-assets.lit.src = 'lit_killah_master.png'
-assets.canto.src = 'lit_cantando_flow.png'
-assets.fondo.src = 'fondo_ciudad_fiesta.jpg'
-assets.bafle.src = 'bafle_anim.png'
 
-// --- ESTADO DEL JUGADOR ---
-const lit = {
-  x: 100,
-  y: GROUND_Y - 120,
-  dy: 0,
-  width: 120,
-  height: 120,
-  frame: 0,
-  timer: 0,
-  isJumping: false
-}
+// Eventos de teclado
+window.onkeydown = (e) => {
+    if (e.code === 'ArrowRight') teclas.derecha = true;
+    if (e.code === 'Space' && litY >= Y_PISO - 121) litDy = -16;
+};
+window.onkeyup = (e) => { if (e.code === 'ArrowRight') teclas.derecha = false; };
 
-let scrollOffset = 0
-let isShowRunning = false
-let gameFinished = false
-const keys = { right: false }
-
-// --- LÓGICA DE DIBUJO ---
-
-function drawBackground() {
-  // Fondo con efecto Parallax (se mueve más lento que el suelo)
-  let bgX = -(scrollOffset * 0.3 % canvas.width)
-  ctx.drawImage(assets.fondo, bgX, 0, canvas.width, canvas.height)
-  ctx.drawImage(assets.fondo, bgX + canvas.width, 0, canvas.width, canvas.height)
-}
-
-function drawFloor() {
-  // Dibujamos el suelo de bloques estilo NES
-  ctx.fillStyle = '#8b4513' // Marrón tierra
-  ctx.fillRect(0, GROUND_Y, canvas.width, 80)
-  
-  // Línea superior de los bloques
-  ctx.fillStyle = '#ffaa00'
-  ctx.fillRect(0, GROUND_Y, canvas.width, 6)
-}
-
-function drawPlayer() {
-  const currentAsset = isShowRunning ? assets.canto : assets.lit
-  
-  // Midu usa: width / frames. Asumimos 4 frames por fila.
-  const spriteW = currentAsset.width / 4
-  const spriteH = currentAsset.height / (isShowRunning ? 1 : 2)
-
-  if (Date.now() - lit.timer > (isShowRunning ? 250 : 130)) {
-    lit.frame = (lit.frame + 1) % 4
-    lit.timer = Date.now()
-  }
-
-  // Si camina, usa fila 1. Si está quieto, fila 0.
-  const row = (keys.right && !isShowRunning) ? 1 : 0
-
-  ctx.drawImage(
-    currentAsset,
-    lit.frame * spriteW, row * spriteH, spriteW, spriteH,
-    lit.x, lit.y, lit.width, lit.height
-  )
-}
-
-function drawFlag() {
-  const flagX = 5000 - scrollOffset
-  // Mástil
-  ctx.fillStyle = 'white'
-  ctx.fillRect(flagX + 40, GROUND_Y - 300, 8, 300)
-  // Bandera roja
-  ctx.fillStyle = 'red'
-  ctx.fillRect(flag
+// Iniciar el bucle
+draw();
