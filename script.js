@@ -8,10 +8,11 @@ const playButton = document.getElementById('playButton');
 let Y_PISO;
 let scrollOffset = 0;
 
-// --- CONFIGURACIÓN ---
+// --- CONFIG ---
 const GRAVEDAD = 0.8;
 let VELOCIDAD = 6;
 let SALTO = 16;
+const FRAMES_WALK = 4;
 
 // Sprites
 const assets = {
@@ -28,7 +29,7 @@ assets.fondo.src = 'fondo_ciudad_fiesta.jpg';
 assets.bafle.src = 'bafle_anim.png';
 assets.gorra.src = 'enemigo_gorra.png';
 
-// Estado del personaje
+// Estado
 let lit = { x: 100, y: 0, dy: 0, w: 120, h: 120 };
 let enSuelo = false;
 let showActivo = false;
@@ -55,6 +56,16 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
+// Reinicia juego
+function reiniciar() {
+    scrollOffset = 0;
+    lit.x = 100; lit.y = Y_PISO - lit.h; lit.dy = 0;
+    gameFinished = false;
+    showActivo = false;
+    teclas.derecha = false; teclas.izquierda = false;
+    videoContainer.style.display = "none";
+}
+
 // --- LOOP PRINCIPAL ---
 function loop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -63,7 +74,7 @@ function loop() {
     if (gameFinished) {
         ctx.fillStyle = "white";
         ctx.font = "30px Arial";
-        ctx.fillText("¡CHOCHASTE! RECARGA", canvas.width/2 - 150, canvas.height/2);
+        ctx.fillText("¡CHOCHASTE! TOCA PARA REINICIAR", canvas.width/2 - 180, canvas.height/2);
         requestAnimationFrame(loop);
         return;
     }
@@ -82,13 +93,8 @@ function loop() {
     // 3. Física personaje
     if (!showActivo) {
         lit.y += lit.dy;
-        if (lit.y + lit.h < Y_PISO) {
-            lit.dy += GRAVEDAD;
-            enSuelo = false;
-        } else {
-            lit.dy = 0; lit.y = Y_PISO - lit.h;
-            enSuelo = true;
-        }
+        if (lit.y + lit.h < Y_PISO) { lit.dy += GRAVEDAD; enSuelo = false; }
+        else { lit.dy = 0; lit.y = Y_PISO - lit.h; enSuelo = true; }
 
         if (teclas.derecha) {
             if (lit.x < canvas.width * 0.4) lit.x += VELOCIDAD;
@@ -105,15 +111,15 @@ function loop() {
         let ex = en.x - scrollOffset;
         if (ex > -en.w && ex < canvas.width) {
             if (assets[en.sprite].complete) {
-                let f = Math.floor(Date.now() / 150) % 4;
+                let f = Math.floor(Date.now() / 150) % FRAMES_WALK;
                 ctx.drawImage(
-                    assets[en.sprite], 
-                    f * (assets[en.sprite].width / 4), 0, assets[en.sprite].width / 4, assets[en.sprite].height,
+                    assets[en.sprite],
+                    f * (assets[en.sprite].width / FRAMES_WALK), 0,
+                    assets[en.sprite].width / FRAMES_WALK, assets[en.sprite].height,
                     ex, en.y, en.w, en.h
                 );
             }
 
-            // Colisión
             let litBox = {x: lit.x + 10, y: lit.y + 10, w: lit.w - 20, h: lit.h - 10};
             let enBox = {x: ex, y: en.y, w: en.w, h: en.h};
             if (!showActivo &&
@@ -121,19 +127,17 @@ function loop() {
                 litBox.x + litBox.w > enBox.x &&
                 litBox.y < enBox.y + enBox.h &&
                 litBox.y + litBox.h > enBox.y
-            ) {
-                gameFinished = true;
-            }
+            ) gameFinished = true;
         }
     });
 
     // 5. Personaje
     let sprite = showActivo ? assets.canto : assets.lit;
     if (sprite.complete) {
-        let fila = (teclas.derecha && !showActivo) ? 1 : 0;
         let cols = 4, filas = showActivo ? 1 : 2;
         let sw = sprite.width / cols;
         let sh = sprite.height / filas;
+        let fila = showActivo ? 0 : 0; // fila 0 para caminar normal
         let f = Math.floor(Date.now() / (showActivo ? 250 : 150)) % cols;
         ctx.drawImage(sprite, f * sw, fila * sh, sw, sh, lit.x, lit.y, lit.w, lit.h);
     }
@@ -145,8 +149,7 @@ function loop() {
 
     if (scrollOffset > 4950 && !showActivo) {
         showActivo = true;
-        teclas.derecha = false;
-        teclas.izquierda = false;
+        teclas.derecha = false; teclas.izquierda = false;
         videoContainer.style.display = "block";
         videoFinal.play().catch(() => console.log("Clic para activar video/audio"));
         videoFinal.onended = () => {
@@ -159,21 +162,22 @@ function loop() {
 }
 
 // --- CONTROLES TECLADO ---
-window.addEventListener('keydown', (e) => {
+window.addEventListener('keydown', e => {
     if (e.code === 'ArrowRight') teclas.derecha = true;
     if (e.code === 'ArrowLeft') teclas.izquierda = true;
     if (e.code === 'Space' && enSuelo && !showActivo) lit.dy = -SALTO;
 });
-window.addEventListener('keyup', (e) => {
+window.addEventListener('keyup', e => {
     if (e.code === 'ArrowRight') teclas.derecha = false;
     if (e.code === 'ArrowLeft') teclas.izquierda = false;
 });
 
 // --- BOTÓN DE INICIO ---
-playButton.onclick = () => {
-    playButton.style.display = "none";
-    loop();
-};
+playButton.onclick = () => { playButton.style.display = "none"; loop(); };
+
+// --- REINICIO AL TOCAR DESPUÉS DE MORIR ---
+canvas.addEventListener('click', () => { if (gameFinished) reiniciar(); });
+canvas.addEventListener('touchstart', () => { if (gameFinished) reiniciar(); });
 
 // --- CONTROLES TÁCTILES MÓVIL ---
 function createMobileControls() {
@@ -188,30 +192,24 @@ function createMobileControls() {
 
     const btnIzq = document.createElement('button');
     btnIzq.innerText = '⬅';
-    btnIzq.style.fontSize = '40px';
-    btnIzq.style.padding = '20px';
-    btnIzq.style.opacity = '0.5';
-    btnIzq.style.background = 'transparent';
+    btnIzq.style.fontSize = '40px'; btnIzq.style.padding = '20px';
+    btnIzq.style.opacity = '0.5'; btnIzq.style.background = 'transparent';
     btnIzq.style.border = 'none';
     btnIzq.addEventListener('touchstart', () => teclas.izquierda = true);
     btnIzq.addEventListener('touchend', () => teclas.izquierda = false);
 
     const btnDer = document.createElement('button');
     btnDer.innerText = '➡';
-    btnDer.style.fontSize = '40px';
-    btnDer.style.padding = '20px';
-    btnDer.style.opacity = '0.5';
-    btnDer.style.background = 'transparent';
+    btnDer.style.fontSize = '40px'; btnDer.style.padding = '20px';
+    btnDer.style.opacity = '0.5'; btnDer.style.background = 'transparent';
     btnDer.style.border = 'none';
     btnDer.addEventListener('touchstart', () => teclas.derecha = true);
     btnDer.addEventListener('touchend', () => teclas.derecha = false);
 
     const btnSalto = document.createElement('button');
     btnSalto.innerText = '⬆';
-    btnSalto.style.fontSize = '40px';
-    btnSalto.style.padding = '20px';
-    btnSalto.style.opacity = '0.5';
-    btnSalto.style.background = 'transparent';
+    btnSalto.style.fontSize = '40px'; btnSalto.style.padding = '20px';
+    btnSalto.style.opacity = '0.5'; btnSalto.style.background = 'transparent';
     btnSalto.style.border = 'none';
     btnSalto.addEventListener('touchstart', () => { if (enSuelo) lit.dy = -SALTO; });
 
