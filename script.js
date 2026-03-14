@@ -2,55 +2,67 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const videoFinal = document.getElementById('videoFinal');
 const audioFinal = document.getElementById('audioFinal');
+const videoContainer = document.getElementById('videoContainer');
 
-// Ajuste real al tamaño de la ventana
-function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-}
-window.onresize = resize;
-resize();
-
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 ctx.imageSmoothingEnabled = false;
 
-// Configuración estilo Mario
-const GRAVEDAD = 0.8;
 const Y_PISO = canvas.height - 100;
 
+// 1. CARGA DE ARCHIVOS
 const assets = {
-    lit: new Image(), canto: new Image(), fondo: new Image()
+    lit: new Image(), canto: new Image(), fondo: new Image(), bafle: new Image()
 };
 assets.lit.src = 'lit_killah_master.png';
 assets.canto.src = 'lit_cantando_flow.png';
 assets.fondo.src = 'fondo_ciudad_fiesta.jpg';
+assets.bafle.src = 'bafle_anim.png';
 
+// 2. ESTADO DEL JUEGO
 let scrollOffset = 0;
 let litX = 100;
 let litY = Y_PISO - 120;
 let litDy = 0;
 let showInCourse = false;
+let gameIsOver = false;
 const teclas = { derecha: false };
 
+// 3. DEFINICIÓN DE ENEMIGOS (Aquí los hacemos fijos para que no desaparezcan)
+const enemigos = [
+    { x: 800, y: Y_PISO - 80 },
+    { x: 1600, y: Y_PISO - 80 },
+    { x: 2500, y: Y_PISO - 80 },
+    { x: 3500, y: Y_PISO - 80 }
+];
+
 function draw() {
+    if (gameIsOver) {
+        ctx.fillStyle = "white";
+        ctx.font = "30px Arial";
+        ctx.fillText("¡CHOQUE! RECARGA PARA INTENTARLO", canvas.width/2 - 250, canvas.height/2);
+        return;
+    }
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // 1. DIBUJAR FONDO (Si no carga, se verá negro pero el juego seguirá)
+    // DIBUJAR FONDO
     if (assets.fondo.complete) {
         let xF = -(scrollOffset * 0.3 % canvas.width);
         ctx.drawImage(assets.fondo, xF, 0, canvas.width, canvas.height);
         ctx.drawImage(assets.fondo, xF + canvas.width, 0, canvas.width, canvas.height);
     }
 
-    // 2. DIBUJAR PISO DE BLOQUES (Siempre visible)
-    ctx.fillStyle = "#8b4513"; // Marrón Mario
+    // DIBUJAR PISO (Color sólido para que nunca desaparezca)
+    ctx.fillStyle = "#8b4513"; 
     ctx.fillRect(0, Y_PISO, canvas.width, 100);
-    ctx.fillStyle = "#ffaa00"; // Borde brillante
+    ctx.fillStyle = "#ffaa00";
     ctx.fillRect(0, Y_PISO, canvas.width, 6);
 
-    // 3. LÓGICA DE MOVIMIENTO
+    // LÓGICA DE MOVIMIENTO Y GRAVEDAD
     if (!showInCourse) {
         litY += litDy;
-        if (litY + 120 < Y_PISO) litDy += GRAVEDAD;
+        if (litY + 120 < Y_PISO) litDy += 0.8;
         else { litDy = 0; litY = Y_PISO - 120; }
 
         if (teclas.derecha) {
@@ -59,34 +71,47 @@ function draw() {
         }
     }
 
-    // 4. DIBUJAR A LIT (Si la imagen no carga, dibuja un cuadro para que sepas dónde está)
-    if (assets.lit.complete && !showInCourse) {
-        let fila = teclas.derecha ? 1 : 0;
-        let sw = assets.lit.width / 4;
-        let sh = assets.lit.height / 2;
-        let frame = Math.floor(Date.now() / 130) % 4;
-        ctx.drawImage(assets.lit, frame * sw, fila * sh, sw, sh, litX, litY, 120, 120);
-    } else if (showInCourse && assets.canto.complete) {
-        let sw = assets.canto.width / 4;
-        let frame = Math.floor(Date.now() / 250) % 4;
-        ctx.drawImage(assets.canto, frame * sw, 0, sw, assets.canto.height, litX, litY, 120, 120);
-    } else {
-        // MODO DE EMERGENCIA: Cuadro rojo si no hay imagen
-        ctx.fillStyle = "red";
-        ctx.fillRect(litX, litY, 50, 120);
+    // DIBUJAR ENEMIGOS Y DETECTAR COLISIÓN
+    enemigos.forEach(en => {
+        let screenX = en.x - scrollOffset;
+        if (screenX > -100 && screenX < canvas.width) {
+            if (assets.bafle.complete) {
+                let frameB = Math.floor(Date.now() / 150) % 4;
+                ctx.drawImage(assets.bafle, frameB * (assets.bafle.width/4), 0, assets.bafle.width/4, assets.bafle.height, screenX, en.y, 80, 80);
+            }
+            
+            // COLISIÓN MATEMÁTICA (Sin errores)
+            if (!showInCourse && litX < screenX + 50 && litX + 60 > screenX && litY + 100 > en.y) {
+                gameIsOver = true;
+            }
+        }
+    });
+
+    // DIBUJAR A LIT (Sincronizado para evitar parpadeo)
+    let spriteActual = showInCourse ? assets.canto : assets.lit;
+    if (spriteActual.complete) {
+        let fila = (teclas.derecha && !showInCourse) ? 1 : 0;
+        let numFrames = 4;
+        let sw = spriteActual.width / numFrames;
+        let sh = showInCourse ? spriteActual.height : spriteActual.height / 2;
+        let frame = Math.floor(Date.now() / (showInCourse ? 250 : 130)) % numFrames;
+        
+        ctx.drawImage(spriteActual, frame * sw, fila * sh, sw, sh, litX, litY, 120, 120);
     }
 
-    // META (Bandera)
-    let metaX = 4000 - scrollOffset;
-    ctx.fillStyle = "white"; ctx.fillRect(metaX, Y_PISO - 200, 5, 200);
-    ctx.fillStyle = "red"; ctx.fillRect(metaX + 5, Y_PISO - 200, 40, 30);
+    // META Y ACTIVACIÓN DE VIDEO/AUDIO
+    let metaX = 5000 - scrollOffset;
+    ctx.fillStyle = "white"; ctx.fillRect(metaX, Y_PISO - 300, 5, 300); // Mástil
+    ctx.fillStyle = "red"; ctx.fillRect(metaX + 5, Y_PISO - 300, 50, 40); // Bandera
 
-    if (scrollOffset > 3950 && !showInCourse) {
+    if (scrollOffset > 4900 && !showInCourse) {
         showInCourse = true;
-        document.getElementById('videoContainer').style.display = "block";
-        videoFinal.play();
+        teclas.derecha = false;
+        videoContainer.style.display = "block";
+        videoFinal.play().catch(e => console.log("Esperando interacción..."));
+        
         videoFinal.onended = () => {
-            document.getElementById('videoContainer').style.display = "none";
+            videoContainer.style.display = "none";
             audioFinal.play();
         };
     }
@@ -94,12 +119,12 @@ function draw() {
     requestAnimationFrame(draw);
 }
 
-// Eventos de teclado
+// EVENTOS
 window.onkeydown = (e) => {
     if (e.code === 'ArrowRight') teclas.derecha = true;
-    if (e.code === 'Space' && litY >= Y_PISO - 121) litDy = -16;
+    if (e.code === 'Space' && litY >= Y_PISO - 121 && !showInCourse) litDy = -16;
 };
 window.onkeyup = (e) => { if (e.code === 'ArrowRight') teclas.derecha = false; };
 
-// Iniciar el bucle
+// INICIO
 draw();
