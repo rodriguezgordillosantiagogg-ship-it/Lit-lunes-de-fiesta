@@ -23,13 +23,13 @@ const assets = {
     bafle: new Image(), micro: new Image(), gorra: new Image()
 };
 
-// --- CARGA DE ASSETS ---
+// --- CARGA DE ASSETS (Nombres corregidos según tu lista) ---
 assets.lit.onload = checkCarga; assets.lit.src = 'lit_killah_master.png';
 assets.canto.onload = checkCarga; assets.canto.src = 'lit_cantando_flow.png';
 assets.fondo.onload = checkCarga; assets.fondo.src = 'fondo_ciudad_fiesta.jpg';
-assets.bafle.onload = checkCarga; assets.bafle.src = 'bafle_anim.png.png';
-assets.micro.onload = checkCarga; assets.micro.src = 'micro_anim.png';
-assets.gorra.onload = checkCarga; assets.gorra.src = 'enemigo_gorra.png';
+assets.bafle.onload = checkCarga; assets.bafle.src = 'bafle_anim.png'; // Corregido
+assets.micro.onload = checkCarga; assets.micro.src = 'micro_anim.png'; // Corregido
+assets.gorra.onload = checkCarga; assets.gorra.src = 'enemigo_gorra.png'; // Corregido
 
 let scrollOffset = 0;
 let gameIsOver = false;
@@ -77,7 +77,6 @@ const enemigos = [
     new Enemigo(3500, Y_PISO - 80, assets.micro)
 ];
 
-// --- EVENTOS ---
 window.addEventListener('keydown', (e) => {
     if (e.code === 'ArrowRight') teclas.derecha.presionada = true;
     if (e.code === 'ArrowLeft') teclas.izquierda.presionada = true;
@@ -88,7 +87,7 @@ window.addEventListener('keyup', (e) => {
     if (e.code === 'ArrowLeft') teclas.izquierda.presionada = false;
 });
 
-// Touch (Celular)
+// Controles Celular
 document.getElementById('btnIzq').addEventListener('touchstart', (e) => { e.preventDefault(); teclas.izquierda.presionada = true; });
 document.getElementById('btnIzq').addEventListener('touchend', () => teclas.izquierda.presionada = false);
 document.getElementById('btnDer').addEventListener('touchstart', (e) => { e.preventDefault(); teclas.derecha.presionada = true; });
